@@ -6,6 +6,9 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
+
+	"github.com/ALenfant/codecrafters-redis-go/app/parser"
 )
 
 func main() {
@@ -35,29 +38,40 @@ func main() {
 func handleRequest(conn net.Conn) {
 	reader := bufio.NewReader(conn)
 	for {
-		message, err := reader.ReadString('\r')
+		log.Printf("Error dddfd")
+
+		parsedData, err := parser.ParseData(reader)
 		if err != nil {
 			conn.Close()
-			log.Printf("Error reading message: %v\n", err)
+			log.Printf("Error parsing data: %v\n", err)
 			return
 		}
-		if len(message) < 1 {
-			conn.Close()
-			log.Printf("Empty message\n")
-			return
-		}
+		fmt.Printf("%v", parsedData)
 
-		fmt.Printf("Message incoming: %s", string(message))
+		switch parsedData := parsedData.(type) {
+		case *parser.RedisArray:
+			for _, command := range parsedData.Items {
+				switch command := command.(type) {
+				case *parser.RedisBulkString:
+					runCommand(*command, conn)
+				default:
+					conn.Close()
+					log.Printf("expected bulkstring command, but received: %#v\n", command)
+					return
+				}
+			}
 
-		valueType := message[0]
-		if valueType == '*' {
-			arrayLength := message[1:]
-			fmt.Printf("ARRAY LENGTH %v", arrayLength)
-		} else {
+		default:
 			conn.Close()
-			log.Printf("Unknown type: %v\n", valueType)
+			log.Printf("expected array of commands, but received: %#v\n", parsedData)
 			return
 		}
+	}
+}
+
+func runCommand(command parser.RedisBulkString, conn net.Conn) {
+	commandString := strings.ToLower(string(command))
+	if commandString == "ping" {
 		conn.Write([]byte("+PONG\r\n"))
 	}
 }
