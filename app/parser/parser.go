@@ -40,7 +40,7 @@ func ParseData(reader *bufio.Reader) (interface{}, error) {
 		return nil, fmt.Errorf("empty message")
 	}
 
-	fmt.Printf("Message incoming: %s\n", string(message))
+	fmt.Printf("DEBUG Message incoming: %s\n", string(message))
 
 	redisType, err := parseType(message)
 	if err != nil {
