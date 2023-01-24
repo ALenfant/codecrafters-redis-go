@@ -38,8 +38,6 @@ func main() {
 func handleRequest(conn net.Conn) {
 	reader := bufio.NewReader(conn)
 	for {
-		log.Printf("Error dddfd")
-
 		parsedData, err := parser.ParseData(reader)
 		if err != nil {
 			conn.Close()
@@ -50,15 +48,18 @@ func handleRequest(conn net.Conn) {
 
 		switch parsedData := parsedData.(type) {
 		case *parser.RedisArray:
-			for _, command := range parsedData.Items {
-				switch command := command.(type) {
-				case *parser.RedisBulkString:
-					runCommand(*command, conn)
-				default:
-					conn.Close()
-					log.Printf("expected bulkstring command, but received: %#v\n", command)
+			command := parsedData.Items[0]
+			arguments := parsedData.Items[1:]
+			switch command := command.(type) {
+			case *parser.RedisBulkString:
+				if err := runCommand(command.Content, arguments, conn); err != nil {
+					log.Printf("Error while running command: %#v: %v\n", *command, err)
 					return
 				}
+			default:
+				conn.Close()
+				log.Printf("expected bulkstring command, but received: %#v\n", command)
+				return
 			}
 
 		default:
@@ -69,9 +70,21 @@ func handleRequest(conn net.Conn) {
 	}
 }
 
-func runCommand(command parser.RedisBulkString, conn net.Conn) {
-	commandString := strings.ToLower(string(command))
-	if commandString == "ping" {
+func runCommand(command string, arguments []parser.RedisData, conn net.Conn) error {
+	command = strings.ToLower(command)
+	if command == "ping" {
 		conn.Write([]byte("+PONG\r\n"))
+	} else if command == "echo" {
+		log.Printf("DDDDDDDDDD: %#v\n", arguments)
+		messageString, ok := arguments[0].(*parser.RedisBulkString)
+		if !ok {
+			return fmt.Errorf("expected bulkstring, got : %v", arguments[0])
+		}
+		conn.Write([]byte("+"))
+		conn.Write([]byte(messageString.Content))
+		conn.Write([]byte("\r\n"))
+	} else {
+		return fmt.Errorf("unknown command: %s", command)
 	}
+	return nil
 }

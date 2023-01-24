@@ -17,13 +17,23 @@ type RedisTypeInfo struct {
 	Length int
 }
 
-type RedisArray struct {
-	Items []interface{}
+type RedisData interface {
+	isRedisData()
 }
 
-type RedisBulkString string
+type RedisArray struct {
+	Items []RedisData
+}
 
-func ParseData(reader *bufio.Reader) (interface{}, error) {
+func (d RedisArray) isRedisData() {}
+
+type RedisBulkString struct {
+	Content string
+}
+
+func (d RedisBulkString) isRedisData() {}
+
+func ParseData(reader *bufio.Reader) (RedisData, error) {
 	message, err := reader.ReadString('\r')
 	if err != nil {
 		return nil, fmt.Errorf("error reading message: %v", err)
@@ -52,14 +62,13 @@ func ParseData(reader *bufio.Reader) (interface{}, error) {
 		if err != nil {
 			return nil, fmt.Errorf("array parsing error: %v", err)
 		}
-		return &RedisArray{items}, nil
+		return &RedisArray{Items: items}, nil
 	} else if redisType.Type == RedisTypeBulkString {
 		content, err := parseBulkString(reader, redisType.Length)
 		if err != nil {
 			return nil, fmt.Errorf("bulk string parsing error: %v", err)
 		}
-		contentBulkString := RedisBulkString(content)
-		return &contentBulkString, nil
+		return &RedisBulkString{Content: content}, nil
 	} else {
 		return nil, fmt.Errorf("unsupported type: %#v", redisType)
 	}
@@ -86,8 +95,8 @@ func parseType(message string) (*RedisTypeInfo, error) {
 	}
 }
 
-func parseArrayItems(reader *bufio.Reader, arrayLength int) ([]interface{}, error) {
-	var arrayItems []interface{}
+func parseArrayItems(reader *bufio.Reader, arrayLength int) ([]RedisData, error) {
+	var arrayItems []RedisData
 	for i := 0; i < arrayLength; i++ {
 		item, err := ParseData(reader)
 		if err != nil {
