@@ -50,8 +50,6 @@ func ParseData(reader *bufio.Reader) (RedisData, error) {
 		return nil, fmt.Errorf("empty message")
 	}
 
-	fmt.Printf("DEBUG Message incoming: %s\n", string(message))
-
 	redisType, err := parseType(message)
 	if err != nil {
 		return nil, fmt.Errorf("message parsing error: %v", err)
@@ -81,14 +79,12 @@ func parseType(message string) (*RedisTypeInfo, error) {
 		if err != nil {
 			return nil, err
 		}
-		fmt.Printf("ARRAY LENGTH %v\n", arrayLength)
 		return &RedisTypeInfo{Type: RedisTypeArray, Length: arrayLength}, nil
 	} else if valueType == '$' { //Bulk String
 		stringLength, err := strconv.Atoi(message[1:])
 		if err != nil {
 			return nil, err
 		}
-		fmt.Printf("STRING LENGTH %v\n", stringLength)
 		return &RedisTypeInfo{Type: RedisTypeBulkString, Length: stringLength}, nil
 	} else {
 		return nil, fmt.Errorf("unknown type: %c (%v)", valueType, valueType)

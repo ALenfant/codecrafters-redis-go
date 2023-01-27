@@ -2,11 +2,14 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ALenfant/codecrafters-redis-go/app/parser"
 	"github.com/ALenfant/codecrafters-redis-go/app/store"
@@ -52,7 +55,6 @@ func (s *RedisServer) handleRequest(conn net.Conn) {
 			log.Printf("Error parsing data: %v\n", err)
 			return
 		}
-		fmt.Printf("%v", parsedData)
 
 		switch parsedData := parsedData.(type) {
 		case *parser.RedisArray:
@@ -99,7 +101,24 @@ func (s *RedisServer) runCommand(command string, arguments []parser.RedisData, c
 		if !ok {
 			return fmt.Errorf("expected val bulkstring, got : %v", arguments[0])
 		}
-		s.store.Set(key.Content, val.Content)
+		fmt.Printf("DDDEBUG %v\n", toJson(arguments))
+		if len(arguments) > 2 {
+			parameter := arguments[2].(*parser.RedisBulkString)
+			parameterVal := arguments[3].(*parser.RedisBulkString)
+
+			if strings.ToLower(parameter.Content) == "px" {
+				expirationMs, err := strconv.ParseInt(parameterVal.Content, 10, 64)
+				if err != nil {
+					return fmt.Errorf("couldnt parse expiration ms %v : %v", *parameterVal, err)
+				}
+				expirationTime := time.Now().Add(time.Duration(expirationMs) * time.Millisecond)
+				s.store.SetWithExpiration(key.Content, val.Content, &expirationTime)
+			} else {
+				return fmt.Errorf("unrecognized param %v %v", *parameter, *parameterVal)
+			}
+		} else {
+			s.store.Set(key.Content, val.Content)
+		}
 		conn.Write([]byte("+OK\r\n"))
 	} else if command == "get" {
 		key, ok := arguments[0].(*parser.RedisBulkString)
@@ -121,6 +140,14 @@ func (s *RedisServer) runCommand(command string, arguments []parser.RedisData, c
 		return fmt.Errorf("unknown command: %s", command)
 	}
 	return nil
+}
+
+func toJson(obj interface{}) string {
+	str, err := json.Marshal(obj)
+	if err != nil {
+		log.Panicf(fmt.Sprintf("%v", err))
+	}
+	return string(str)
 }
 
 func main() {
